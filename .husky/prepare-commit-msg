@@ -1,0 +1,7 @@
+# git passes a message source in $2 for -m, -F, -t, commit.template, merge, squash, -c, -C and
+# --amend; the prompts would overwrite that message, and `yarn commit` would ask twice.
+[ -z "$2" ] || exit 0
+# Probe /dev/tty in a subshell first: without a terminal, dash exits on a failed `exec <` and
+# git aborts the commit.
+(exec </dev/tty) 2>/dev/null || exit 0
+node_modules/.bin/cz --hook </dev/tty || true

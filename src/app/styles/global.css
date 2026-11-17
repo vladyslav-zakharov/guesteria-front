@@ -1,0 +1,9 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* next/font defines --font-urbanist on <html>. The theme variable needs a different name and
+   `inline`, or it refers to itself. */
+@theme inline {
+  --font-sans: var(--font-urbanist);
+}

@@ -1,0 +1,68 @@
+name: Development Lint & Build
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [24.x, 26.x]
+
+    steps:
+      # A repository created from this template does not inherit the template's Actions
+      # variables. Fail here with the fix instead of deep inside `next build`.
+      - name: Check repository variables
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+        run: |
+          if [ -z "$NEXT_PUBLIC_API_URL" ]; then
+            echo "::error title=Missing repository variable::Set NEXT_PUBLIC_API_URL in Settings > Secrets and variables > Actions > Variables (see README, Getting Started)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Lint application
+        run: yarn lint
+
+      - name: Type-check application
+        run: yarn typescript
+
+      - name: Test generators
+        run: yarn test:cli
+
+      - name: Build application
+        run: yarn build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+
+      # Runs last because it writes into src/. The generated code must pass the same lint and
+      # type-check as hand-written code.
+      - name: Generated code passes lint and type-check
+        run: |
+          yarn generate:entity ciProbe
+          yarn generate:feature ciProbe
+          yarn lint
+          yarn typescript

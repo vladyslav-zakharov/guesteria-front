@@ -1,0 +1,4 @@
+{
+  "src/**/*.{js,jsx,mjs,cjs,mts,cts,ts,tsx}": "eslint --fix --report-unused-disable-directives --max-warnings 0",
+  "cli/**/*.mjs": "eslint --fix --report-unused-disable-directives --max-warnings 0"
+}
