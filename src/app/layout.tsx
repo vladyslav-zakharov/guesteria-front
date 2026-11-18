@@ -22,6 +22,9 @@ export const metadata: Metadata = {
     template: '%s | StayHub',
   },
   description: 'Search hotels, compare rooms and book your stay.',
+  // The UI is English-only and the Guest Hub already replies in the guest's language, so
+  // browser auto-translate (with translate="no" on <html>) would only garble it.
+  other: { google: 'notranslate' },
 };
 
 export const viewport: Viewport = {
@@ -36,7 +39,7 @@ type Props = {
 
 const RootLayout = ({ children }: Props) => {
   return (
-    <html lang="en" className={jakarta.variable}>
+    <html lang="en" translate="no" className={jakarta.variable}>
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
         <TanStackQueryProvider>
           <main className="mx-auto w-full max-w-md pb-safe">{children}</main>
