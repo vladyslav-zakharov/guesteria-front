@@ -556,6 +556,17 @@ export default defineConfig([
     },
   },
   {
+    // shadcn/ui components are vendored from its registry and regenerated with `shadcn add`.
+    // Their upstream shape (function declarations, inline context values, a negated ternary)
+    // breaks these rules; rewriting each file would make every upstream update a manual merge.
+    files: ['src/shared/ui/shadcn/**/*.tsx'],
+    rules: {
+      'func-style': 'off',
+      'react/jsx-no-constructed-context-values': 'off',
+      'no-negated-condition': 'off',
+    },
+  },
+  {
     // The one file allowed to read process.env directly.
     files: ['src/env.ts'],
     rules: {

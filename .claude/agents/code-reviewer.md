@@ -24,7 +24,8 @@ Review checklist:
 - Input validation implemented via Zod, not ad hoc `if` checks
 - Performance considerations addressed (unnecessary client components, missing memoization on
   expensive renders, images not using `next/image`)
-- No test coverage expectation — the application has no test suite; do not flag missing tests
+- The front has no unit-test suite by the author's decision; do not ask for tests. Changes are
+  checked by strict lint, `tsc`, `next build` and a browser pass
 
 Also check, since this repo enforces its own architecture rules from `CLAUDE.md`:
 - `'use client'` sits on the smallest leaf that needs it, not a page/layout/wrapper

@@ -52,21 +52,19 @@ Everything you do afterwards is checked against this list. If the ticket is vagu
 For each expected behavior, follow the real code path through this project's layers:
 
 ```
-app/**/page.tsx (server, prefetch)
-  → HydrationBoundary/dehydrate
-    → features/widgets (client, 'use client' leaf)
-      → entities/<entity>/hooks (TanStack Query)
-        → entities/<entity>/api (axios) → backend
-      → shared/store (zustand, purely client state)
+app/**/page.tsx (server: parse params with Zod, redirect/notFound, no prefetch)
+  → features/widgets (client, 'use client' leaf)
+    → entities/<entity>/hooks (TanStack Query, fetched in the browser)
+      → entities/<entity>/api (axios, baseURL /api) → Next rewrite → backend
+    → shared/store (zustand, purely client state)
 ```
 
 Read the changed files **in full**, and read the unchanged files the path passes through — a bug
 is very often the mismatch between new code and the old function it calls.
 
 Confirm the behavior is *produced*, not that files with plausible names exist. Concretely:
-- the page really prefetches the query it hands to `HydrationBoundary` — same `QueryKeys` member
-  and same params as the client hook underneath actually uses, or the hydration is a no-op and
-  the client refetches from scratch;
+- the page passes the feature exactly the params it parsed, and the feature's hook uses the
+  same `QueryKeys` member and params shape as every other reader of that data;
 - a form's Zod schema actually accepts the input the ticket describes and rejects what it should,
   and `zodResolver` is wired to the form, not a hand-rolled `if (!value)` check;
 - a mutation really calls `queryClient.invalidateQueries` with the `QueryKeys` member the read
@@ -99,8 +97,9 @@ Look hardest at the places where correctness actually dies in this stack:
 - **Silent failure** — a caught error with no user-facing feedback; a mutation with no `onError`
   where the ticket implies the user should see something went wrong; a `Promise` that is never
   awaited.
-- **Hydration mismatches** — server-prefetched data whose shape or params differ from what the
-  client hook requests, producing a flash of refetched content or a React hydration warning.
+- **Hydration mismatches** — server-rendered output that differs from the first client render
+  (for example a date computed in the device's time zone instead of through
+  `shared/lib/dayjs`), producing a React hydration warning.
 - **Contract drift** — a changed API response shape or field name that other entities/features
   still assume, with nothing in the PR description acknowledging it.
 - **Env var misuse** — a value that must stay server-only declared as `NEXT_PUBLIC_*` (leaks to
@@ -108,8 +107,9 @@ Look hardest at the places where correctness actually dies in this stack:
 
 Verify before you report. If you can cheaply confirm a suspicion — grep for every caller of a
 changed hook or query key, read the entity's type definitions against what the component
-destructures — do it. There is no test suite to lean on here, so a confidently reported bug that
-turns out not to be real costs the team more than a missed nit.
+destructures — do it. The front has no unit-test suite (the author's decision; do not ask for
+tests), so nothing automated backs up your reasoning, and a confidently reported bug that turns
+out not to be real costs the team more than a missed nit.
 
 ## Severity
 
