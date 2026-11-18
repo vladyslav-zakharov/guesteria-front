@@ -18,6 +18,13 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from 'shared/ui/shadcn/drawer';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from 'shared/ui/shadcn/select';
 import { Separator } from 'shared/ui/shadcn/separator';
 
 export type GuestsValue = { adults: number; children: number[] };
@@ -182,23 +189,37 @@ export const GuestPicker = ({
                   >
                     Age of child {slot + 1}
                   </label>
-                  <select
-                    id={`${ageIdPrefix}-${slot}`}
-                    value={children[slot]}
-                    onChange={event =>
-                      handleChildAge({
-                        index: slot,
-                        age: Number(event.target.value),
-                      })
+                  <Select
+                    value={String(children[slot])}
+                    onValueChange={value =>
+                      handleChildAge({ index: slot, age: Number(value) })
                     }
-                    className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                   >
-                    {CHILD_AGES.map(option => (
-                      <option key={option} value={option}>
-                        {formatChildAge(option)}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      id={`${ageIdPrefix}-${slot}`}
+                      className="min-h-11 w-full text-base"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    {/* The list portals out of the sheet but its pointer events still bubble
+                        to the Drawer through React, so vaul would treat a scroll or a tap on
+                        an age as a sheet drag without data-vaul-no-drag. */}
+                    <SelectContent
+                      position="popper"
+                      data-vaul-no-drag
+                      className="max-h-[min(var(--radix-select-content-available-height),18rem)]"
+                    >
+                      {CHILD_AGES.map(option => (
+                        <SelectItem
+                          key={option}
+                          value={String(option)}
+                          className="min-h-11 text-base"
+                        >
+                          {formatChildAge(option)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </li>
               ))}
             </ul>
