@@ -1,25 +1,33 @@
 import { ReactNode } from 'react';
 
-import type { Metadata } from 'next';
-import { Urbanist } from 'next/font/google';
+import type { Metadata, Viewport } from 'next';
+import { Plus_Jakarta_Sans } from 'next/font/google';
 
-import { Header } from 'widgets/header/ui/header/header';
+import { BottomNav } from 'widgets/app-shell/ui/bottom-nav/bottom-nav';
+import { AccountSheet } from 'features/account/ui/account-sheet/account-sheet';
+import { AuthSheet } from 'features/auth/ui/auth-sheet/auth-sheet';
 import { TanStackQueryProvider } from 'shared/providers/tanstack-query';
-import { ThemeProvider } from 'shared/providers/theme';
+import { Toaster } from 'shared/ui/shadcn/sonner';
 
 import 'app/styles/global.css';
 
-const urbanist = Urbanist({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
-  variable: '--font-urbanist',
+  variable: '--font-jakarta',
 });
 
 export const metadata: Metadata = {
   title: {
-    default: 'Next.js Template',
-    template: '%s | Next.js Template',
+    default: 'StayHub',
+    template: '%s | StayHub',
   },
-  description: 'A Next.js App Router starter built on Feature-Sliced Design.',
+  description: 'Search hotels, compare rooms and book your stay.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 type Props = {
@@ -28,13 +36,14 @@ type Props = {
 
 const RootLayout = ({ children }: Props) => {
   return (
-    <html lang="en" className={urbanist.variable}>
-      <body className="bg-white text-gray-600 transition-colors duration-1000 ease-in-out dark:bg-gray-600 dark:text-white">
+    <html lang="en" className={jakarta.variable}>
+      <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
         <TanStackQueryProvider>
-          <ThemeProvider>
-            <Header />
-            {children}
-          </ThemeProvider>
+          <main className="mx-auto w-full max-w-md pb-safe">{children}</main>
+          <BottomNav />
+          <AuthSheet />
+          <AccountSheet />
+          <Toaster />
         </TanStackQueryProvider>
       </body>
     </html>

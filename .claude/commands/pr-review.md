@@ -221,9 +221,9 @@ Inline comments carry the severity marker, the full finding body, and the sugges
 block when the agent provided one — one comment per finding:
 
 ```markdown
-🔴 [Blocker] `process.env.NEXT_PUBLIC_API_URL` is read directly here instead of importing `env`.
+🔴 [Blocker] `process.env.BACKEND_API_URL` is read directly here instead of importing `env`.
 process.env may only be read in src/env.ts (CLAUDE.md, Architecture Rules #1).
-Import `{ env }` from 'env' and use `env.NEXT_PUBLIC_API_URL` instead.
+Import `{ env }` from 'env' and use `env.BACKEND_API_URL` instead.
 ```
 
 Where a finding carries a `suggestion`, use GitHub's **suggested changes** so the author can
@@ -234,7 +234,7 @@ apply the fix in one click:
 (CLAUDE.md, Architecture Rules #5):
 
 ```suggestion
-const { data: todos } = useGetTodos(params);
+const { data: bookings } = useGetBookings();
 ```
 ````
 

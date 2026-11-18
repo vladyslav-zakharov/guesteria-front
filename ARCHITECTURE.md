@@ -1,19 +1,22 @@
 # ARCHITECTURE.md - Reference for Claude Code
 
-Detailed reference for this template: the stack, the Feature-Sliced Design layout, code
+Detailed reference for the StayHub frontend: the stack, the Feature-Sliced Design layout, code
 examples, and step-by-step recipes. `CLAUDE.md` holds the hard rules and points here for
 the "how it looks in code" detail. Read this when you need an example or the exact folder
 layout; treat the rules in `CLAUDE.md` as authoritative.
 
 ## Stack
 
-Next.js (App Router) frontend template with TypeScript:
+Next.js (App Router) frontend with TypeScript:
 - **Next.js 16 App Router (Turbopack)** - React Server Components by default
-- **TanStack Query** - server state, caching, SSR prefetch + hydration
+- **TanStack Query** - server state and caching, fetched in the browser
 - **Zustand** - client state
 - **Zod + React Hook Form** - validation and forms
-- **Axios** - HTTP client (`shared/lib/axios.ts`)
-- **Tailwind CSS** - styling (`cn()` from `shared/lib/styles`)
+- **Axios** - HTTP client (`shared/lib/axios.ts`), base URL `/api` (same-origin rewrite)
+- **Tailwind CSS 4 + shadcn/ui** - styling (`cn()` from `shared/lib/styles`), shadcn
+  components in `shared/ui/shadcn/`
+- **dayjs + `utc` plugin** - all date parsing, math and formatting, through the one
+  configured instance in `shared/lib/dayjs.ts`
 - **@t3-oss/env-nextjs** - typed, validated environment variables
 - **SVGR** - `.svg` imported as React components
 - **eslint-plugin-boundaries** - enforces the FSD layer rules at lint time
@@ -27,7 +30,7 @@ app → widgets → features → entities → shared
 ```
 A layer may import only **itself** (same slice) and layers **strictly below** it — enforced
 by `boundaries/dependencies` in `eslint.config.mjs`, not just convention. `shared` has no slices
-and imports only other `shared` segments, plus libraries and `env`. So `entities/todos` can
+and imports only other `shared` segments, plus libraries and `env`. So `entities/hotels` can
 never import `entities/users`, `features/*`, or `widgets/*`.
 
 ## Directory Structure
@@ -37,8 +40,8 @@ src/
 ├── app/                     # App Router: routing, layouts, pages, global styles
 │   ├── layout.tsx           # Server Component
 │   ├── page.tsx             # Server Component
-│   ├── loading.tsx          # Shown while a page awaits its data
 │   ├── error.tsx            # Client Component (Next requires it)
+│   ├── not-found.tsx
 │   └── styles/global.css
 ├── widgets/                 # Compositions of features
 ├── features/                # UI + user-interaction logic (yarn generate:feature)
@@ -54,11 +57,12 @@ src/
 │       ├── types/           # Params, payloads, responses
 │       └── hooks/           # React Query hooks and queryOptions factories
 ├── shared/
-│   ├── ui/                  # All reusable UI components
+│   ├── ui/                  # Reusable UI components, one flat file each
+│   │   └── shadcn/          # shadcn/ui registry components (button, drawer, …)
 │   ├── types/               # General types
 │   ├── store/               # All zustand stores
-│   ├── providers/           # All providers (React Query, theme, …)
-│   ├── lib/                 # Global utils + configured libs (api, getQueryClient, cn)
+│   ├── providers/           # All providers (React Query)
+│   ├── lib/                 # Global utils + configured libs (api, getQueryClient, cn, dayjs)
 │   ├── icons/               # Custom SVG icons (SVGR components)
 │   ├── hooks/               # Global hooks (no network calls — those live in entities/)
 │   └── constants/           # Global constants + QueryKeys
@@ -77,9 +81,10 @@ The set of folders/segments is fixed and lint-enforced (`boundaries/no-unknown-f
 ## Layer placement (where a file goes)
 
 `src/shared/**` — everything global, reusable and feature-agnostic:
-- `shared/ui/` - **all reusable UI components** (Button, Input, Modal, …). A component
-  used by more than one feature, or generic enough to be, belongs here — never duplicated
-  inside a feature.
+- `shared/ui/` - **all reusable UI components**. A component used by more than one feature,
+  or generic enough to be, belongs here — never duplicated inside a feature. Each one is a
+  flat file (`shared/ui/date-range-picker.tsx`, not `shared/ui/date-range-picker/…`).
+  `shared/ui/shadcn/` holds the shadcn/ui components (`Button`, `Drawer`, `Input`, …).
 - `shared/types/` - all general/shared types.
 - `shared/store/` - **all zustand stores**. A store is never created inside a feature or
   a component file.
@@ -87,7 +92,9 @@ The set of folders/segments is fixed and lint-enforced (`boundaries/no-unknown-f
   library that needs one). Providers are client components and are mounted in
   `src/app/layout.tsx`.
 - `shared/lib/` - global utilities and configured library instances (`axios.ts` → `api`,
-  `query.ts` → `getQueryClient`, `styles.ts` → `cn`).
+  `query.ts` → `getQueryClient`, `styles.ts` → `cn`, `dayjs.ts` → `dayjs` with the `utc`
+  plugin and `getUtcToday`). Import dates from `shared/lib/dayjs`, never from `dayjs`
+  directly, and do no hand-rolled `Date` arithmetic.
 - `shared/icons/` - **custom icons only** — `.svg` files imported directly as React
   components via SVGR. Use this when the icon must be customized (`fill="currentColor"`,
   size, theme). An icon that is never restyled goes to `public/icons/` instead.
@@ -103,9 +110,9 @@ feature will ever reuse — is scaffolded as an `entities/<entity>`.
 name is the route prefix (routes under `/users` → `src/entities/users/`), with exactly
 `api/` (the axios requests), `types/` (params, responses, payloads), and `hooks/` (the
 React Query hooks). An entity contains **no UI and no business logic**. `features` and
-`widgets` use an entity's `hooks/` and `types/`, never its `api/`. A page prefetches through
-the entity's `queryOptions` factory in `hooks/`. Only the entity's own `hooks/` and server
-code in `app/` (a route handler, a Server Action) import `entities/<entity>/api` directly.
+`widgets` use an entity's `hooks/` and `types/`, never its `api/`. Only the entity's own
+`hooks/` and server code in `app/` (a route handler, a Server Action) import
+`entities/<entity>/api` directly.
 
 `src/features/<feature>/` — UI components plus the logic of the user's interaction with
 them: `ui/` (components), `hooks/`, `schemas/` (Zod schemas for this feature's forms and
@@ -119,44 +126,35 @@ apps may not need it.
 ## Code Examples
 
 ### Pages are Server Components (rule 2)
-A page parses its search params, prefetches on the server and hands the data down through
-`HydrationBoundary`; the client hook reads it from the cache instead of refetching. From
-`src/app/page.tsx`:
+A page awaits its params, parses them with Zod, sends bad input to `notFound()` or
+`redirect()`, and renders one client feature with the parsed values. It does not prefetch:
+LiteAPI rates take several seconds, so the feature fetches them in the browser behind a
+skeleton. There is no `HydrationBoundary` and no `loading.tsx`. From
+`src/app/search/page.tsx`:
 ```tsx
 type Props = {
   // Typed by hand: the global PageProps helper comes from `next dev` or `next build`, and
   // `yarn typescript` runs without either.
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<SearchParamsRecord>;
 };
 
-const HomePage = async ({ searchParams }: Props) => {
-  const { page } = todosSearchParamsSchema.parse(await searchParams);
-  const params: IGetTodosParams = { _page: page, _limit: TODOS_PER_PAGE };
-  const queryClient = getQueryClient();
+const SearchPage = async ({ searchParams }: Props) => {
+  const raw = await searchParams;
+  // The back validates stays against the UTC calendar day, so the front uses the same day.
+  const today = getUtcToday();
+  const stay = parseStayParams({ raw, today });
 
-  await queryClient.prefetchQuery(todosQueryOptions(params));
+  if (!stay) {
+    redirect(buildPrefillHref(parseStayPrefill(raw)));
+  }
+
+  const { sort, refundableOnly } = parseResultsParams(raw);
 
   return (
-    <main className="flex flex-col gap-6 p-2">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">Todos</h1>
-        <p className="text-sm">
-          The data comes from jsonplaceholder, which accepts changes but does
-          not save them.
-        </p>
-      </div>
-      <HydrationBoundary state={dehydrate(queryClient)}>
-        <TodosList params={params} />
-      </HydrationBoundary>
-      <hr />
-      <CreateTodoForm />
-    </main>
+    <HotelResults stay={stay} sort={sort} refundableOnly={refundableOnly} />
   );
 };
 ```
-
-On the server every `getQueryClient()` call returns a new client. Call it once per page, keep
-it in a local `const`, and pass that instance to both `prefetchQuery` and `dehydrate`.
 
 `error.tsx` (and `global-error.tsx`, if you add one) is the exception to rule 2: Next
 requires error boundaries to be Client Components, so the file carries `'use client'`. From
@@ -165,7 +163,10 @@ requires error boundaries to be Client Components, so the file carries `'use cli
 // Next requires error boundaries to be Client Components, unlike pages and layouts.
 'use client';
 
-import { Button } from 'shared/ui/button/button';
+import { CircleAlert } from 'lucide-react';
+
+import { Button } from 'shared/ui/shadcn/button';
+import { StateMessage } from 'shared/ui/state-message';
 
 type Props = {
   error: unknown;
@@ -173,11 +174,20 @@ type Props = {
 };
 
 const ErrorPage = ({ retry }: Props) => (
-  <main className="flex flex-col items-start gap-4 p-2">
-    <h1 className="text-2xl font-semibold">Something went wrong</h1>
-    <p>The page could not load. Try again in a moment.</p>
-    <Button onClick={retry}>Try again</Button>
-  </main>
+  <div className="px-4 pt-4">
+    <StateMessage
+      tone="error"
+      titleAs="h1"
+      icon={<CircleAlert />}
+      title="Something went wrong"
+      description="The page could not load. Try again in a moment."
+      action={
+        <Button type="button" className="min-h-11 w-full" onClick={retry}>
+          Try again
+        </Button>
+      }
+    />
+  </div>
 );
 
 export default ErrorPage;
@@ -190,66 +200,88 @@ import { createEnv } from '@t3-oss/env-nextjs';
 import * as z from 'zod';
 
 const env = createEnv({
-  client: {
-    NEXT_PUBLIC_API_URL: z.url({ protocol: /^https?$/ }),
+  server: {
+    BACKEND_API_URL: z.url({ protocol: /^https?$/ }),
   },
+  client: {},
   runtimeEnv: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    BACKEND_API_URL: process.env.BACKEND_API_URL,
   },
   emptyStringAsUndefined: true,
 });
 
 export { env };
 ```
-A server-only variable goes in a `server` object next to `client`. t3-env throws when client
-code reads one, so read it only in server code. Everything else imports the validated `env`.
-From `src/shared/lib/axios.ts`:
+`BACKEND_API_URL` is server-only: t3-env throws when client code reads it. The browser never
+calls the back directly. `next.config.ts` imports the validated `env` and rewrites `/api/*`
+to the back, so the `access_token` cookie stays first-party:
 ```ts
-import axios from 'axios';
-
-import { env } from 'env';
-
-export const api = axios.create({
-  baseURL: env.NEXT_PUBLIC_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+async rewrites() {
+  return [
+    {
+      source: '/api/:path*',
+      destination: `${env.BACKEND_API_URL}/api/:path*`,
+    },
+  ];
+},
 ```
+The axios instance in `src/shared/lib/axios.ts` therefore uses the relative base URL `/api`
+with `withCredentials: true`, and reads no env at all.
 
 ### Zod schemas and inferred types (rule 4)
-A form schema and the type derived from it. From
-`src/features/todos/schemas/validation.ts`:
+A form schema. From `src/features/guest-hub/schemas/message.ts`:
 ```ts
 import * as z from 'zod';
 
-export const createTodoSchema = z.object({
-  title: z.string().trim().min(1, { error: 'Title is required' }),
-  completed: z.boolean().default(false),
-});
+export const MESSAGE_MAX_LENGTH = 1000;
 
-export type CreateTodoInput = z.infer<typeof createTodoSchema>;
+// Mirrors the `content` rule of POST /bookings/:bookingId/messages, so a blank or
+// oversized question never leaves the browser.
+export const messageSchema = z.object({
+  content: z
+    .string()
+    .trim()
+    .min(1, 'Type a question.')
+    .max(
+      MESSAGE_MAX_LENGTH,
+      `Keep your question under ${MESSAGE_MAX_LENGTH} characters.`,
+    ),
+});
 ```
 Search params are untrusted input too, so the page parses them with a schema from the
-feature. From `src/features/todos/schemas/todos-search-params.ts`:
+feature, and the type comes from `z.infer`. From
+`src/features/hotel-results/schemas/results-params.ts`:
 ```ts
-import * as z from 'zod';
-
-// A missing or malformed `?page=` falls back to the first page instead of failing the request.
-export const todosSearchParamsSchema = z.object({
-  page: z.coerce.number().int().min(1).catch(1),
+// A hand-edited or stale URL falls back to the defaults instead of failing the page: sort
+// and the filter only refine a valid stay.
+const resultsParamsSchema = z.object({
+  sort: z.preprocess(
+    firstValue,
+    z.enum(RESULTS_SORTS).catch(DEFAULT_RESULTS_SORT),
+  ),
+  refundableOnly: z.preprocess(
+    firstValue,
+    z
+      .string()
+      .optional()
+      .catch(undefined)
+      .transform(value => value === 'true'),
+  ),
 });
+
+export type ResultsParams = z.infer<typeof resultsParamsSchema>;
 ```
 Forms use React Hook Form with `zodResolver(schema)` and let `useForm` infer its types:
-`useForm({ resolver: zodResolver(createTodoSchema) })`. A single generic,
+`useForm({ resolver: zodResolver(messageSchema) })`. A single generic,
 `useForm<z.infer<…>>`, stops type-checking as soon as the schema's input and output types
 differ: a `.default()`, or a `.transform()` or `z.coerce` that changes the type. If a generic
 is unavoidable, pass all three:
 `useForm<z.input<typeof schema>, unknown, z.output<typeof schema>>`.
 
 ### Entity hooks (rule 5)
-Each query has one `queryOptions` factory; the hook and the server prefetch both call it.
-From the output of `yarn generate:entity user`, `src/entities/users/hooks/get.ts`:
+Each query has one `queryOptions` factory, so the key and the fetcher are written once
+(pages in this app do not prefetch, but a future one would reuse the same factory). From
+the output of `yarn generate:entity user`, `src/entities/users/hooks/get.ts`:
 ```ts
 // One options factory per query, shared by the server prefetch in app/ and the hook, so
 // the query key and the fetcher cannot drift apart.
@@ -310,37 +342,28 @@ export const getUsers = async (
 
 ### Assets (rule 6)
 An icon that is restyled (size, `currentColor`, theme) is an SVG in `src/shared/icons/`,
-imported as a React component through SVGR. From
-`src/features/theme-toggle/ui/theme-toggle/theme-toggle.tsx`:
+imported as a React component through SVGR. From `src/shared/ui/logo.tsx`:
 ```tsx
-'use client';
+import LogoIcon from 'shared/icons/stayhub-logo.svg';
+import { cn } from 'shared/lib/styles';
 
-import MoonIcon from 'shared/icons/moon.svg';
-import SunIcon from 'shared/icons/sun.svg';
-import { Themes, useThemeStore } from 'shared/store/theme';
-import { Button } from 'shared/ui/button/button';
-
-export const ThemeToggle = () => {
-  const theme = useThemeStore(state => state.theme);
-  const toggleTheme = useThemeStore(state => state.toggleTheme);
-  const isDark = theme === Themes.dark;
-
-  return (
-    <Button
-      variant="ghost"
-      className="p-2"
-      aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-      onClick={toggleTheme}
-    >
-      {isDark ? (
-        <SunIcon aria-hidden className="size-5" />
-      ) : (
-        <MoonIcon aria-hidden className="size-5" />
-      )}
-    </Button>
-  );
+type Props = {
+  className?: string;
 };
+
+export const Logo = ({ className }: Props) => (
+  <span
+    className={cn(
+      'inline-flex items-center gap-2 text-xl font-extrabold tracking-tight text-foreground',
+      className,
+    )}
+  >
+    <LogoIcon aria-hidden className="size-8 text-primary" />
+    StayHub
+  </span>
+);
 ```
+Stock UI icons come from `lucide-react`.
 An icon that is never restyled goes to `public/icons/` and is rendered from its URL
 (`/icons/…`) with `next/image`, which skips optimization for a `.svg` file on its own; a plain
 `<img>` fails lint (`@next/next/no-img-element`). Every other local image is a WebP file in
@@ -353,65 +376,46 @@ The only raster files under `src/` are the Next.js metadata image files in `app/
 ### Imports without barrel files (rule 7)
 ```ts
 // ✅ Import the file that declares the symbol
-import { useGetTodos } from 'entities/todos/hooks/get';
 import { cn } from 'shared/lib/styles';
+import { Button } from 'shared/ui/shadcn/button';
 ```
 ```ts
-// ❌ Fails type-check (TS2307): there is no entities/todos/index.ts or shared/lib/index.ts
-import { useGetTodos } from 'entities/todos';
+// ❌ Fails type-check (TS2307): there is no shared/ui/index.ts or shared/lib/index.ts
+import { Button } from 'shared/ui';
 import { cn } from 'shared/lib';
 ```
 Use absolute imports from `src` (per-layer `paths` in `tsconfig.json`) across layers. Inside
-the same slice, relative imports of siblings are correct and preferred (`../todo/todo`).
+the same slice, relative imports of siblings are correct and preferred.
 
 ### Providers
 A provider is a client component in `shared/providers`, mounted once in the root layout.
 From `src/app/layout.tsx`:
 ```tsx
 <TanStackQueryProvider>
-  <ThemeProvider>
-    <Header />
-    {children}
-  </ThemeProvider>
+  <main className="mx-auto w-full max-w-md pb-safe">{children}</main>
+  <BottomNav />
+  <AuthSheet />
+  <AccountSheet />
+  <Toaster />
 </TanStackQueryProvider>
 ```
 
 ### Styling (rule 9)
 Compose Tailwind classes with `cn()`; never string-concatenate class names. A component with
-variants maps each variant to a class string and merges it with `cn()`. From
-`src/shared/ui/button/button.tsx`:
+variants uses `cva` (as the shadcn components in `shared/ui/shadcn/` do) and merges the
+result with `cn()`. A component with one look just merges its classes with the caller's
+`className`. From `src/shared/ui/logo.tsx` (above):
 ```tsx
-const variants = {
-  primary: 'bg-blue-600 text-white hover:bg-blue-700',
-  ghost: 'hover:bg-gray-100 dark:hover:bg-gray-500',
-};
-
-interface IProps extends ComponentProps<'button'> {
-  variant?: keyof typeof variants;
-}
-
-export const Button = ({
-  type,
-  variant = 'primary',
-  className,
-  ...props
-}: IProps) => (
-  <button
-    // react/button-has-type checks only a literal or a ternary of literals, so the prop is
-    // narrowed here instead of passed through.
-    type={type === 'submit' ? 'submit' : 'button'}
-    className={cn(
-      'cursor-pointer rounded-sm px-4 py-2 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-      variants[variant],
-      className,
-    )}
-    {...props}
-  />
-);
+<span
+  className={cn(
+    'inline-flex items-center gap-2 text-xl font-extrabold tracking-tight text-foreground',
+    className,
+  )}
+>
 ```
 ```tsx
 // ❌ Fails lint (no-restricted-imports): the only stylesheet is app/styles/global.css
-import './button.css';
+import './logo.css';
 ```
 A reusable value (a brand color, a spacing scale, a breakpoint, a font) is a `@theme`
 variable in `src/app/styles/global.css`, used as a utility class (`bg-brand`):
@@ -436,24 +440,24 @@ Safari 16.4+, Chrome 111+ and Firefox 128+.
 
 ### Naming (rule 10)
 ```text
-✅ src/features/todos/ui/create-todo-form/create-todo-form.tsx
-❌ src/features/todos/ui/CreateTodoForm/createTodoForm.tsx    (fails lint: check-file)
+✅ src/features/hotel-results/ui/hotel-results/hotel-results.tsx
+❌ src/features/hotel-results/ui/HotelResults/hotelResults.tsx    (fails lint: check-file)
 ```
 
 ### Comments (rule 11)
 ```ts
 // ✅ States what the code cannot
-// jsonplaceholder pages start at 1, not 0.
-const firstPage = 1;
+// The back validates stays against the UTC calendar day, so the front uses the same day.
+const today = getUtcToday();
 ```
 ```ts
 // ❌ Restates the code (lint cannot catch this)
-// Set the first page to 1.
-const firstPage = 1;
+// Get today's UTC date.
+const today = getUtcToday();
 ```
 ```ts
 // ❌ Fails lint (no-inline-comments)
-const firstPage = 1; // pages start at 1
+const today = getUtcToday(); // UTC day
 ```
 
 ## Common Tasks
@@ -475,10 +479,12 @@ const firstPage = 1; // pages start at 1
    need it); reuse components from `shared/ui`; import each component from its own file
 3. If the page reads search params, add a Zod schema for them in
    `features/<feature>/schemas/`
-4. Create `src/app/<route>/page.tsx` as a Server Component: parse `searchParams` with that
-   schema, prefetch with the entity's `queryOptions` factory, and render the feature inside
-   `HydrationBoundary` (see "Pages are Server Components")
-5. Run `yarn lint:fix && yarn typescript`
+4. Create `src/app/<route>/page.tsx` as a Server Component: await and parse `params` /
+   `searchParams` with that schema, `redirect()` or `notFound()` on bad input, and render the
+   feature with the parsed values; the feature fetches through entity hooks (see "Pages are
+   Server Components")
+5. Add a `*.test.ts` next to new parsing or formatting logic
+6. Run `yarn lint:fix && yarn typescript`
 
 ### Add an environment variable
 1. Add it to the `client` or `server` schema in `src/env.ts`

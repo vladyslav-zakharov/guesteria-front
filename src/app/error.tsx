@@ -1,7 +1,10 @@
 // Next requires error boundaries to be Client Components, unlike pages and layouts.
 'use client';
 
-import { Button } from 'shared/ui/button/button';
+import { CircleAlert } from 'lucide-react';
+
+import { Button } from 'shared/ui/shadcn/button';
+import { StateMessage } from 'shared/ui/state-message';
 
 type Props = {
   error: unknown;
@@ -9,11 +12,20 @@ type Props = {
 };
 
 const ErrorPage = ({ retry }: Props) => (
-  <main className="flex flex-col items-start gap-4 p-2">
-    <h1 className="text-2xl font-semibold">Something went wrong</h1>
-    <p>The page could not load. Try again in a moment.</p>
-    <Button onClick={retry}>Try again</Button>
-  </main>
+  <div className="px-4 pt-4">
+    <StateMessage
+      tone="error"
+      titleAs="h1"
+      icon={<CircleAlert />}
+      title="Something went wrong"
+      description="The page could not load. Try again in a moment."
+      action={
+        <Button type="button" className="min-h-11 w-full" onClick={retry}>
+          Try again
+        </Button>
+      }
+    />
+  </div>
 );
 
 export default ErrorPage;

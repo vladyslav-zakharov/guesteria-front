@@ -1,13 +1,37 @@
-## Next.js Template ⚡
-A starter for Next.js 16 App Router apps built on
+## StayHub
+StayHub is a mobile web hotel-booking app: search a destination, compare hotels, book a room
+on the [LiteAPI](https://docs.liteapi.travel/) sandbox, then talk to **Guest Hub**, a
+per-booking AI concierge running on Gemini through Vertex AI. This repo is the Next.js
+frontend and the entry point for reviewers.
+
+| Repo | What it holds |
+| --- | --- |
+| [`guesteria-front`](https://github.com/vladyslav-zakharov/guesteria-front) (this repo) | Next.js 16 App Router UI, deployed on Vercel |
+| [`guesteria-back`](https://github.com/vladyslav-zakharov/guesteria-back) | Fastify API: auth, LiteAPI client, bookings, the Guest Hub chat |
+| [`guesteria-infra`](https://github.com/vladyslav-zakharov/guesteria-infra) | Terraform for Cloud Run, Secret Manager and Cloud Build on GCP |
+
+- **Live app (after deploy):** https://guesteria-front.vercel.app
+- **Reviewer credentials:** `<email to be provided>` / `<password to be provided>`
+
+Delivery docs:
+- [Write-up](docs/write-up.md): API integration and data protection, agents and pipeline,
+  tests, how AI output was verified, time spent and limitations.
+- [AI pipeline](docs/ai-pipeline.md): the agents, their order and what each one caught.
+- [Testing](docs/testing.md): what is tested, why, and the latest results.
+- [Design spec](docs/superpowers/specs/2026-11-17-guesteria-booking-clone-design.md) and
+  [implementation plan](docs/superpowers/plans/2026-11-17-stayhub-booking-clone.md).
+
+The project started from a Next.js 16 App Router template built on
 [Feature-Sliced Design](https://feature-sliced.design/). Lint enforces the architecture, and
-generators scaffold the API layer and the features, so every project built from it keeps the
-same structure and rules.
+generators scaffold the API layer and the features.
 
 - 🧱 **FSD enforced by lint:** layer boundaries, a fixed set of folders, kebab-case names and
   the ban on barrel files all fail `yarn lint` when broken.
-- 🔄 **Server data written once:** pages prefetch with TanStack Query into a per-request
-  client and hydrate it on the client, through one `queryOptions` factory per query.
+- 🔄 **Client-side server state:** pages are Server Components that parse the URL and render
+  a client feature; the feature fetches through TanStack Query, with one `queryOptions`
+  factory per query.
+- 🔒 **Same-origin API:** `next.config.ts` rewrites `/api/*` to the back, so the auth cookie
+  stays first-party.
 - ⚙️ **Typed env:** every environment variable is declared and validated with Zod in
   `src/env.ts`.
 - 🏗️ **Generators:** `yarn generate:entity` and `yarn generate:feature` scaffold code that
@@ -45,17 +69,21 @@ yarn install
 ```bash
 cp .env.example .env
 ```
+`BACKEND_API_URL` is the only variable. It is server-only (no `NEXT_PUBLIC_` prefix): the
+browser never calls the back directly. `next.config.ts` rewrites every `/api/*` request to
+`${BACKEND_API_URL}/api/*`, so the `access_token` cookie is first-party. The default
+`http://localhost:3001` points at a local `guesteria-back`; start it first (see its README).
 ### 3. Run the development server:
 ```bash
 yarn dev
 ```
 The app runs at http://localhost:3000.
 
-### 4. Set the CI variable (repositories created from this template)
-GitHub does not copy Actions variables into a repository created from a template. Add
-`NEXT_PUBLIC_API_URL` under **Settings > Secrets and variables > Actions > Variables**
-(the value from `.env.example` works for the demo). Until you do, the `Development Lint & Build`
-workflow stops at its first step with this instruction.
+### 4. Set the CI secret
+`next build` validates `BACKEND_API_URL`, so CI needs it. Add `BACKEND_API_URL` as a
+repository **secret** under **Settings > Secrets and variables > Actions > Secrets** (any
+valid `http(s)` URL builds; Vercel uses its own env setting at deploy time). Until you do, the
+`Development Lint & Build` workflow stops at its first step with this instruction.
 
 
 ## 🧰 Scripts and Git hooks
@@ -86,7 +114,7 @@ Husky runs three git hooks:
   `commit.template` set, run `yarn commit` to get the prompts.
 
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
-`type(scope?): subject`, for example `fix(todos): keep the page after a toggle`. The
+`type(scope?): subject`, for example `fix(trips): keep the tab after a refresh`. The
 `commit-msg` hook rejects any other format. The allowed types are listed in
 [`@commitlint/config-conventional`](https://github.com/conventional-changelog/commitlint/tree/master/@commitlint/config-conventional#type-enum).
 
@@ -107,9 +135,9 @@ other `shared` segments, plus libraries and `env`. `eslint-plugin-boundaries` en
   small apps may not need it.
 - `features/`: one user-facing capability each, with its UI, hooks, Zod schemas and helpers.
 - `entities/`: the API layer, one folder per route prefix, with no UI. `features` and
-  `widgets` use an entity's `hooks/` and `types/`, never its `api/`. A page prefetches through
-  the entity's `queryOptions` factory in `hooks/`. Only the entity's own `hooks/` and server
-  code in `app/` (a route handler, a Server Action) import `entities/<entity>/api` directly.
+  `widgets` use an entity's `hooks/` and `types/`, never its `api/`. Only the entity's own
+  `hooks/` and server code in `app/` (a route handler, a Server Action) import
+  `entities/<entity>/api` directly.
 - `shared/`: everything global and feature-agnostic: UI components, utils, stores, providers,
   constants, types and icons.
 
@@ -165,7 +193,7 @@ Claude Code in this repo gets them automatically — no setup required.
 | `.claude/commands/pr-review.md` (`/pr-review`) | Orchestrated PR review: runs the two agents below in parallel against a PR (or the local branch diff), merges their findings, and publishes one review. |
 | `.claude/agents/pr-review/pr-architecture-reviewer.md` | Checks a diff against this repo's own architecture rules, read live from `CLAUDE.md` (Server/Client components, generator-only `entities`/`features`, no barrel files, layer boundaries, `env.ts`, Zod, `QueryKeys`, Tailwind-only styling, kebab-case). |
 | `.claude/agents/pr-review/pr-functional-reviewer.md` | Verifies a PR actually implements its ticket and hunts for logic bugs on the real code path (query-key mismatches, stale query-cache data, unhandled loading/error states). |
-| `.claude/agents/code-reviewer.md` | General quality/maintainability review for a diff. No test-coverage checks — the application has no test suite. |
+| `.claude/agents/code-reviewer.md` | General quality/maintainability review for a diff, The front has no unit-test suite, so it does not ask for tests. |
 | `.claude/agents/security-auditor.md` | Frontend-focused security review: XSS, `NEXT_PUBLIC_*` env leakage, CSP/security headers, client-side token handling. |
 | `.claude/agents/ai-engineer.md` | LLM/RAG integration specialist for AI-powered feature work. |
 

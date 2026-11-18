@@ -1,6 +1,6 @@
 # CLAUDE.md - Project Guide for Claude Code
 
-Next.js (App Router) + TypeScript frontend template on **Feature-Sliced Design**:
+StayHub frontend: Next.js (App Router) + TypeScript on **Feature-Sliced Design**:
 `app → widgets → features → entities → shared`.
 
 **Main rule: everything goes by the FSD architecture.** For the stack, the folder layout,
@@ -51,9 +51,11 @@ working around it. Code examples for each rule live in `ARCHITECTURE.md`.
    `global-error.tsx` are the exception: Next requires them to be Client Components, so they
    carry `'use client'`. Interactive code is a client component in `features/` (or `widgets/`)
    carrying its own `'use client'`; the page only composes them. `'use client'` sits on the
-   smallest **leaf** that needs it. A page prefetches server data with the entity's
-   `queryOptions` factory into one per-request client from `getQueryClient()`
-   (`shared/lib/query`), then passes that same client to `dehydrate` inside `HydrationBoundary`.
+   smallest **leaf** that needs it. In this app a page awaits its `params`/`searchParams`,
+   parses them with Zod (redirecting or calling `notFound()` on bad input) and renders one
+   client feature with the parsed values. Data is fetched in the browser by the feature's
+   entity hooks behind a skeleton; pages do **not** prefetch, and there is no
+   `HydrationBoundary` and no `src/app/loading.tsx`.
 
 3. **Layer placement.**
    - `shared/**` = global, reusable, feature-agnostic: `ui`, `types`, `store`, `providers`,
@@ -63,8 +65,7 @@ working around it. Code examples for each rule live in `ARCHITECTURE.md`.
      route prefix, no UI or business logic.
    - `features/<feature>` = UI + interaction logic. `widgets/` = compositions of features.
      `app/` = routing, layouts, pages; no business logic.
-   - `features` and `widgets` use an entity's `hooks/` and `types/`, never its `api/`. A page
-     prefetches through the entity's `queryOptions` factory in `hooks/`. Only the entity's own
+   - `features` and `widgets` use an entity's `hooks/` and `types/`, never its `api/`. Only the entity's own
      `hooks/` and server code in `app/` (a route handler, a Server Action) import
      `entities/<entity>/api` directly. Lint (`boundaries/dependencies`) enforces the
      `features`/`widgets` part; the rest is a convention that review checks.
@@ -78,9 +79,9 @@ working around it. Code examples for each rule live in `ARCHITECTURE.md`.
 5. **Server state → TanStack Query, client state → zustand.** API data is fetched with a
    query/mutation hook from `entities/<entity>/hooks`, keyed with a `QueryKeys` member, and
    invalidated after mutations — never mirrored into a store or `useState`. Each query has one
-   `queryOptions` factory next to its hook in `entities/<entity>/hooks/`; the hook and the
-   server prefetch both call it, so the key and the fetcher are written once. Purely
-   client-side state (theme, modals, wizard step) is a zustand store in `shared/store`. Query
+   `queryOptions` factory next to its hook in `entities/<entity>/hooks/`, so the key and the
+   fetcher are written once. Purely client-side state (open sheets, wizard step) is a zustand
+   store in `shared/store`. Query
    keys always come from the `QueryKeys` enum, never inline strings. Never import a
    module-level `QueryClient`: server code calls `getQueryClient()`, which returns a new client
    per request; hooks call `useQueryClient()`.
@@ -100,8 +101,8 @@ working around it. Code examples for each rule live in `ARCHITECTURE.md`.
 
 8. **`src/` has a fixed set of folders.** Every `.ts`/`.tsx` file must match a declared
    layer/segment (`boundaries/no-unknown-files`): no stray top-level folder (`src/utils/`,
-   `src/shared/api/`) and no stray segment inside a slice (`entities/todos/ui/`,
-   `features/todos/store/`). Code in `src/` is TypeScript-only: a `.js`, `.jsx`, `.mjs`,
+   `src/shared/api/`) and no stray segment inside a slice (`entities/hotels/ui/`,
+   `features/trips/store/`). Code in `src/` is TypeScript-only: a `.js`, `.jsx`, `.mjs`,
    `.cjs`, `.mts` or `.cts` file there fails lint (`check-file/filename-blocklist`). A new
    kind of code that doesn't fit → **stop and ask**. The fix is to extend
    `boundaries/elements` in `eslint.config.mjs` on purpose, add a `paths` entry in
@@ -115,8 +116,8 @@ working around it. Code examples for each rule live in `ARCHITECTURE.md`.
    there. A library's own stylesheet is imported from the package (`import 'swiper/css'`),
    never copied into `src/`.
 
-10. **Naming — kebab-case** for every file and folder under `src/` (`create-todo-form.tsx`,
-    `entities/todos/`). `src/app/**` is the exception — it follows Next.js App Router naming
+10. **Naming — kebab-case** for every file and folder under `src/` (`hotel-results.tsx`,
+    `entities/hotels/`). `src/app/**` is the exception — it follows Next.js App Router naming
     (`[id]`, `(group)`, `@slot`, fixed special filenames). Lint-enforced by
     `eslint-plugin-check-file`.
 
